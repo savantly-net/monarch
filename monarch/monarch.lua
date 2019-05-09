@@ -72,7 +72,7 @@ local function cowait(delay)
 	local co = coroutine.running()
 	assert(co, "You must run this form within a coroutine")
 	timer.delay(delay, false, function()
-		coroutine.resume(co)
+		assert(coroutine.resume(co))
 	end)
 	coroutine.yield()
 end
@@ -466,6 +466,11 @@ local function show_in(screen, previous_screen, reload, add_to_stack, cb)
 		if reload and screen.loaded then
 			log("show_in() reloading", screen.id)
 			unload(screen, reload)
+			-- we need to wait here in case the unloaded screen contained any screens
+			-- if this is the case we need to let these sub-screens have their final()
+			-- functions called so that they have time to call unregister()
+			cowait(0)
+			cowait(0)
 		end
 		load(screen)
 		if add_to_stack then
@@ -573,13 +578,13 @@ function M.show(id, options, data, cb)
 
 	local co
 	co = coroutine.create(function()
+		local top = stack[#stack]
 		-- a screen can ignore the stack by setting the no_stack to true
 		local add_to_stack = not options or not options.no_stack
 		if add_to_stack then
 			-- manipulate the current top
 			-- close popup(s) if needed
 			-- transition out
-			local top = stack[#stack]
 			if top then
 				-- keep top popup visible if new screen can be shown on top of a popup
 				if top.popup and screen.popup_on_popup then
@@ -589,7 +594,7 @@ function M.show(id, options, data, cb)
 					while top.popup do
 						stack[#stack] = nil
 						show_out(top, screen, function()
-							coroutine.resume(co)
+							assert(coroutine.resume(co))
 						end)
 						coroutine.yield()
 						top = stack[#stack]
@@ -619,7 +624,7 @@ function M.show(id, options, data, cb)
 		-- screen that has Preload set to true
 		if M.is_preloading(id) then
 			M.when_preloaded(id, function()
-				coroutine.resume(co)
+				assert(coroutine.resume(co))
 			end)
 			coroutine.yield()
 		end
@@ -627,7 +632,7 @@ function M.show(id, options, data, cb)
 
 		if cb then callbacks.when_done(cb) end
 	end)
-	coroutine.resume(co)
+	assert(coroutine.resume(co))
 
 	return true
 end
